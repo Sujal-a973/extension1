@@ -1,0 +1,115 @@
+**theGoodBrowser Chrome Extension & Conversational Layer — Development Plan**
+
+---
+
+## 1. Project Overview
+
+**theGoodBrowser** aims to launch a Chrome extension that automates Gmail and Google Calendar via natural‑language commands. Key innovations:
+- **Natural‑Language Automation**: Model navigates and interacts with Gmail/Calendar like a human, with no direct APIs.
+- **Conversational Layer**: Two‑phase flow (“capture → clarify → complete”) for any task, with follow‑up questions if needed.
+- **Context Management**: Session memory of user intents, parameters, and actions.
+- **Beautiful Frontend**: Intuitive UI embedded in Chrome for chat, inbox/calendar views, and task summaries.
+
+---
+
+## 2. High‑Level Roadmap & Phases
+
+| Phase | Goal | Deliverables |
+|---|---|---|
+| 1. Foundation | Set up modular architecture & core automation modules | Clean file structure; working browser/agent/controller integration |  
+| 2. Core Gmail & Calendar Automation | Automate basic mail/calendar tasks end‑to‑end | Inbox parsing, send/reply email, read events, create/edit events |  
+| 3. Context Management & Two‑Phase Flow | Build memory store; implement capture→clarify→execute pipeline | `context_manager`, `PartialTask`, clarifier modules, test suite |  
+| 4. Conversational Intelligence | Enhance NLU, multi‑step flows, error recovery | Clarification logic in prompts.py; multi‑turn handlers in service.py |  
+| 5. Frontend Integration | Embed chat UI & mini inbox/calendar panels into Chrome | Popup/sidebar UI; interactive chat; real‑time feedback |  
+| 6. Testing & QA | End‑to‑end flows, UX testing, edge‑case handling | Automated tests, user feedback, bug fixes |  
+| 7. Launch & Monitoring | Package, publish to Chrome Web Store, monitor telemetry | Extension package; PostHog dashboards; user analytics |  
+
+---
+
+## 3. Detailed Phase Breakdown
+
+### Phase 1: Foundation
+1. **Verify File Structure & Modules**
+   - Confirm `browser/`, `agent/`, `controller/`, `dom/`, `telemetry/` folders are cleanly separated.
+   - Document each file’s responsibility.
+2. **Integrate Message Manager & Agent**
+   - Ensure `agent/service.py` can receive prompts and call controller actions.
+   - Validate basic “open Gmail” or “open Calendar” flows.
+3. **Browser Automation Core**
+   - Stabilize Playwright integration in `browser/browser.py` & `dom/service.py`.
+4. **Action Registry & Execution**
+   - Review `controller/registry/service.py` and ensure mapping from action names to handlers.
+
+### Phase 2: Core Gmail & Calendar Automation
+1. **Gmail Tasks**
+   - **Read Inbox**: `agent` triggers `browser` to navigate to Gmail and parse inbox via `buildDomTree.js`.
+   - **Send/Reply**: Fill compose UI, recipients, subject, body.
+   - **Search & Filter**: Keyword/date filtering.
+2. **Calendar Tasks**
+   - **View Events**: List upcoming events.
+   - **Create/Edit/Cancel**: Fill event dialogs, handle recurrences.
+3. **Validation & Error Handling**
+   - Handle sign‑in prompts, captive waits, intermittent network.
+
+### Phase 3: Context Management & Two‑Phase Flow
+1. **`context_manager.py`**
+   - In `agent/message_manager/` or `conversation/`, implement in‑memory context store.
+2. **`PartialTask` Model**
+   - Add to `agent/views.py`, storing original prompt, task_type, missing_fields, clarifications.
+3. **Clarifier Module**
+   - `agent/clarifier.py` with `detect_missing_fields` and template map in `agent/prompts.py`.
+4. **Service Integration**
+   - Modify `agent/service.py` main loop to check for `PartialTask`, ask clarifications, then call `execute_action`.
+5. **Tests**
+   - Unit tests for context storage, clarification flow, final prompt assembly.
+
+### Phase 4: Conversational Intelligence
+1. **Natural Language Parsing**
+   - Refine `infer_task_type` with regex/intents for “send email,” “book meeting,” etc.
+2. **Multi‑Step Chains**
+   - Support batching multiple intents: parse & queue in `agent/service.py`.
+3. **Error Recovery**
+   - On failure, generate user‑friendly prompts: "I couldn’t find that email…"
+4. **User Preferences**
+   - Store defaults (e.g., default reminder times) in context; auto‑fill.
+
+### Phase 5: Frontend Integration
+1. **Chrome Extension Boilerplate**
+   - Scaffold manifest.json, permissions for gmail, calendar, tabs, storage.
+2. **Popup/Sidebar UI**
+   - Build React/Tailwind chat window, mini‑inbox & calendar components.
+3. **API Bridging**
+   - Background script → Agent backend communication (via message passing).
+4. **Real‑Time Feedback**
+   - Loading indicators, success/failure toasts.
+5. **Settings Page**
+   - Preferences: theme, notifications, default behaviors.
+
+### Phase 6: Testing & QA
+1. **Automated Unit & Integration Tests**
+   - `agent/tests/`, `browser/tests/`, `controller/tests/`.
+2. **End‑to‑End Cypress Tests**
+   - Simulate user flows in Chrome extension environment.
+3. **User Acceptance Testing**
+   - Beta testers run through scenarios; collect feedback.
+
+### Phase 7: Launch & Monitoring
+1. **Extension Packaging & Chrome Web Store**
+   - Finalize version, privacy policy, icons, description.
+2. **Telemetry & Monitoring**
+   - Enable PostHog dashboards for feature usage, errors.
+3. **Feedback Loop**
+   - In‑extension feedback form; schedule regular metric reviews.
+
+---
+
+## 4. Ongoing & Future Work
+- **Advanced NLU**: Integrate small transformer for slot‑filling.
+- **Cross‑Account Support**: Handle multiple Gmail/Calendar logins.
+- **Third‑Party Integrations**: Zoom invites, Slack notifications.
+- **Mobile Companion UI**: Lightweight React Native app.
+
+---
+
+> Keep this plan as the single source of truth. Update phase statuses as you complete tasks and add new milestones when needed.
+
