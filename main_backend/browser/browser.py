@@ -8,10 +8,7 @@ from dataclasses import dataclass, field
 
 from playwright._impl._api_structures import ProxySettings
 from playwright.async_api import Browser as PlaywrightBrowser
-from playwright.async_api import (
-	Playwright,
-	async_playwright,
-)
+from playwright.async_api import Playwright, async_playwright
 
 from main_backend.browser.context import BrowserContext, BrowserContextConfig
 
@@ -41,15 +38,16 @@ class BrowserConfig:
 
 		chrome_instance_path: None
 			Path to a Chrome instance to use to connect to your normal browser
-			e.g. '/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome'
+			e.g. 'C:\Program Files\Google\Chrome\Application\chrome.exe'
+'
 	"""
 
 	headless: bool = True
 	disable_security: bool = True
 	extra_chromium_args: list[str] = field(default_factory=list)
-	chrome_instance_path: str = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
-	wss_url: str | None = None
-	cdp_url: str | None = None
+	chrome_instance_path: str = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
+	wss_url: str ='http://127.0.0.1:9222'
+	cdp_url: str ="http://localhost:9222"
 
 	proxy: ProxySettings | None = field(default=None)
 	new_context_config: BrowserContextConfig = field(default_factory=BrowserContextConfig)

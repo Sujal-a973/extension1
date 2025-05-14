@@ -108,11 +108,11 @@ pyinstaller==6.11.1
 pyinstaller-hooks-contrib==2025.0
 pyparsing==3.2.1
 pyperclip==1.9.0
-PyQt5==5.15.11
-PyQt5-Qt5==5.15.16
-PyQt5_sip==12.16.1
-PyQtWebEngine==5.15.7
-PyQtWebEngine-Qt5==5.15.16
+PyQt5
+PyQt5-Qt5
+PyQt5_sip
+PyQtWebEngine
+PyQtWebEngine-Qt5
 python-dateutil==2.9.0.post0
 python-dotenv==1.0.1
 python-multipart==0.0.20

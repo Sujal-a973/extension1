@@ -7,16 +7,17 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Type
 
 from openai import RateLimitError
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, create_model
+from pydantic import (BaseModel, ConfigDict, Field, ValidationError,
+                      create_model)
 
+from main_backend.browser.browser import Browser, BrowserConfig
 from main_backend.browser.views import BrowserStateHistory
 from main_backend.controller.registry.views import ActionModel
 from main_backend.dom.history_tree_processor.service import (
-	DOMElementNode,
-	DOMHistoryElement,
-	HistoryTreeProcessor,
-)
+    DOMElementNode, DOMHistoryElement, HistoryTreeProcessor)
 from main_backend.dom.views import SelectorMap
+# ✅ NEW IMPORTS for Gmail action execution
+from main_backend.gmail.send_email import send_email
 
 
 @dataclass
@@ -27,46 +28,37 @@ class AgentStepInfo:
 
 class ActionResult(BaseModel):
 	"""Result of executing an action"""
-
 	is_done: Optional[bool] = False
 	extracted_content: Optional[str] = None
 	error: Optional[str] = None
-	include_in_memory: bool = False  # whether to include in past messages as context or not
+	include_in_memory: bool = False
 
 
 class AgentBrain(BaseModel):
 	"""Current state of the agent"""
-
 	evaluation_previous_goal: str
 	memory: str
 	next_goal: str
 
 
 class AgentOutput(BaseModel):
-	"""Output model for agent
-
-	@dev note: this model is extended with custom actions in AgentService. You can also use some fields that are not in this model as provided by the linter, as long as they are registered in the DynamicActions model.
-	"""
-
+	"""Output model for agent"""
 	model_config = ConfigDict(arbitrary_types_allowed=True)
-
 	current_state: AgentBrain
 	action: list[ActionModel]
 
 	@staticmethod
 	def type_with_custom_actions(custom_actions: Type[ActionModel]) -> Type['AgentOutput']:
-		"""Extend actions with custom actions"""
 		return create_model(
 			'AgentOutput',
 			__base__=AgentOutput,
-			action=(list[custom_actions], Field(...)),  # Properly annotated field with no default
+			action=(list[custom_actions], Field(...)),
 			__module__=AgentOutput.__module__,
 		)
 
 
 class AgentHistory(BaseModel):
 	"""History item for agent actions"""
-
 	model_output: AgentOutput | None
 	result: list[ActionResult]
 	state: BrowserStateHistory
@@ -88,9 +80,6 @@ class AgentHistory(BaseModel):
 		return elements
 
 	def model_dump(self, **kwargs) -> Dict[str, Any]:
-		"""Custom serialization handling circular references"""
-
-		# Handle action serialization
 		model_output_dump = None
 		if self.model_output:
 			action_dump = [
@@ -98,7 +87,7 @@ class AgentHistory(BaseModel):
 			]
 			model_output_dump = {
 				'current_state': self.model_output.current_state.model_dump(),
-				'action': action_dump,  # This preserves the actual action data
+				'action': action_dump,
 			}
 
 		return {
@@ -110,19 +99,15 @@ class AgentHistory(BaseModel):
 
 class AgentHistoryList(BaseModel):
 	"""List of agent history items"""
-
 	history: list[AgentHistory]
 
 	def __str__(self) -> str:
-		"""Representation of the AgentHistoryList object"""
 		return f'AgentHistoryList(all_results={self.action_results()}, all_model_outputs={self.model_actions()})'
 
 	def __repr__(self) -> str:
-		"""Representation of the AgentHistoryList object"""
 		return self.__str__()
 
 	def save_to_file(self, filepath: str | Path) -> None:
-		"""Save history to JSON file with proper serialization"""
 		try:
 			Path(filepath).parent.mkdir(parents=True, exist_ok=True)
 			data = self.model_dump()
@@ -132,19 +117,14 @@ class AgentHistoryList(BaseModel):
 			raise e
 
 	def model_dump(self, **kwargs) -> Dict[str, Any]:
-		"""Custom serialization that properly uses AgentHistory's model_dump"""
 		return {
 			'history': [h.model_dump(**kwargs) for h in self.history],
 		}
 
 	@classmethod
-	def load_from_file(
-		cls, filepath: str | Path, output_model: Type[AgentOutput]
-	) -> 'AgentHistoryList':
-		"""Load history from JSON file"""
+	def load_from_file(cls, filepath: str | Path, output_model: Type[AgentOutput]) -> 'AgentHistoryList':
 		with open(filepath, 'r', encoding='utf-8') as f:
 			data = json.load(f)
-		# loop through history and validate output_model actions to enrich with custom actions
 		for h in data['history']:
 			if h['model_output']:
 				if isinstance(h['model_output'], dict):
@@ -157,63 +137,46 @@ class AgentHistoryList(BaseModel):
 		return history
 
 	def last_action(self) -> None | dict:
-		"""Last action in history"""
 		if self.history and self.history[-1].model_output:
 			return self.history[-1].model_output.action[-1].model_dump(exclude_none=True)
 		return None
 
 	def errors(self) -> list[str]:
-		"""Get all errors from history"""
 		errors = []
 		for h in self.history:
 			errors.extend([r.error for r in h.result if r.error])
 		return errors
 
 	def final_result(self) -> None | str:
-		"""Final result from history"""
 		if self.history and self.history[-1].result[-1].extracted_content:
 			return self.history[-1].result[-1].extracted_content
 		return None
 
 	def is_done(self) -> bool:
-		"""Check if the agent is done"""
-		if (
-			self.history
-			and len(self.history[-1].result) > 0
-			and self.history[-1].result[-1].is_done
-		):
+		if self.history and len(self.history[-1].result) > 0 and self.history[-1].result[-1].is_done:
 			return self.history[-1].result[-1].is_done
 		return False
 
 	def has_errors(self) -> bool:
-		"""Check if the agent has any errors"""
 		return len(self.errors()) > 0
 
 	def urls(self) -> list[str]:
-		"""Get all unique URLs from history"""
 		return [h.state.url for h in self.history if h.state.url]
 
 	def screenshots(self) -> list[str]:
-		"""Get all screenshots from history"""
 		return [h.state.screenshot for h in self.history if h.state.screenshot]
 
 	def action_names(self) -> list[str]:
-		"""Get all action names from history"""
 		return [list(action.keys())[0] for action in self.model_actions()]
 
 	def model_thoughts(self) -> list[AgentBrain]:
-		"""Get all thoughts from history"""
 		return [h.model_output.current_state for h in self.history if h.model_output]
 
 	def model_outputs(self) -> list[AgentOutput]:
-		"""Get all model outputs from history"""
 		return [h.model_output for h in self.history if h.model_output]
 
-	# get all actions with params
 	def model_actions(self) -> list[dict]:
-		"""Get all actions from history"""
 		outputs = []
-
 		for h in self.history:
 			if h.model_output:
 				for action in h.model_output.action:
@@ -222,21 +185,18 @@ class AgentHistoryList(BaseModel):
 		return outputs
 
 	def action_results(self) -> list[ActionResult]:
-		"""Get all results from history"""
 		results = []
 		for h in self.history:
 			results.extend([r for r in h.result if r])
 		return results
 
 	def extracted_content(self) -> list[str]:
-		"""Get all extracted content from history"""
 		content = []
 		for h in self.history:
 			content.extend([r.extracted_content for r in h.result if r.extracted_content])
 		return content
 
 	def model_actions_filtered(self, include: list[str] = []) -> list[dict]:
-		"""Get all model actions from history as JSON"""
 		outputs = self.model_actions()
 		result = []
 		for o in outputs:
@@ -248,15 +208,12 @@ class AgentHistoryList(BaseModel):
 
 class AgentError:
 	"""Container for agent error handling"""
-
 	VALIDATION_ERROR = 'Invalid model output format. Please follow the correct schema.'
 	RATE_LIMIT_ERROR = 'Rate limit reached. Waiting before retry.'
 	NO_VALID_ACTION = 'No valid action found'
 
 	@staticmethod
 	def format_error(error: Exception, include_trace: bool = False) -> str:
-		"""Format error message based on error type and optionally include trace"""
-		message = ''
 		if isinstance(error, ValidationError):
 			return f'{AgentError.VALIDATION_ERROR}\nDetails: {str(error)}'
 		if isinstance(error, RateLimitError):
@@ -264,3 +221,50 @@ class AgentError:
 		if include_trace:
 			return f'{str(error)}\nStacktrace:\n{traceback.format_exc()}'
 		return f'{str(error)}'
+
+
+# ✅ NEW: Execute agent actions (e.g. send_email)
+async def execute_agent_actions(agent_output: AgentOutput) -> list[ActionResult]:
+	results = []
+
+	browser = Browser(BrowserConfig(cdp_url="http://localhost:9222"))
+	playwright_browser = await browser.get_playwright_browser()
+
+	# Find Gmail page
+	gmail_page = None
+	for context in playwright_browser.contexts:
+		for page in context.pages:
+			if "mail.google.com" in page.url:
+				gmail_page = page
+				break
+		if gmail_page:
+			break
+
+	if not gmail_page:
+		context = playwright_browser.contexts[0]
+		gmail_page = context.pages[0]
+		await gmail_page.goto("https://mail.google.com")
+
+	for action in agent_output.action:
+		action_dict = action.model_dump(exclude_none=True)
+		if "send_email" in action_dict:
+			try:
+				data = action_dict["send_email"]
+				await send_email(
+					gmail_page,
+					data.get("to"),
+					data.get("subject"),
+					data.get("body")
+				)
+				results.append(ActionResult(
+					extracted_content="Email sent successfully.",
+					is_done=True,
+					include_in_memory=True
+				))
+			except Exception as e:
+				results.append(ActionResult(
+					error=f"Failed to send email: {str(e)}",
+					is_done=False
+				))
+
+	return results
